@@ -176,7 +176,7 @@ int status;
     checkError(status, "Failed to transfer input A");
 
 	status = clEnqueueWriteBuffer(queue, input_b_buf, CL_FALSE,
-        0, N*O*sizeof(float), input_b, 0, NULL, &write_event[0]);
+        0, N*O*sizeof(float), input_b, 0, NULL, &write_event[1]);
     checkError(status, "Failed to transfer input B");
 
     // Set kernel arguments.

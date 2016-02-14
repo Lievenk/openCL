@@ -32,15 +32,14 @@ float* transform(float* input, int M, int N, int M1, int N1) {
 	return transformed;
 }
 
-void print_clbuild_errors(cl_program program,cl_device_id device)
-	{
-		cout<<"Program Build failed\n";
-		size_t length;
-		char buffer[2048];
-		clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &length);
-		cout<<"--- Build log ---\n "<<buffer<<endl;
-		exit(1);
-	}
+void print_clbuild_errors(cl_program program,cl_device_id device){
+	cout<<"Program Build failed\n";
+	size_t length;
+	char buffer[2048];
+	clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &length);
+	cout<<"--- Build log ---\n "<<buffer<<endl;
+	exit(1);
+}
 
 unsigned char ** read_file(const char *name) {
   size_t size;
@@ -94,14 +93,24 @@ int main(int, char**)
     cl_program program;
     cl_kernel kernel;
 
-	cl_mem input_a_buf; // num_devices elements
-	cl_mem input_b_buf;
-	cl_mem output_buf; // num_devices elements
+	cl_mem input_a_buf;
+	cl_mem input_b_buf; // num_devices elements
+	cl_mem input_c_buf;
+	cl_mem output_buf_1;
+	cl_mem output_buf_2;
 	int status;
 //-------------------------------------------------
 
     
-     context_properties[1] = (cl_context_properties)platform;
+     clGetPlatformIDs(1, &platform, NULL);
+     clGetPlatformInfo(platform, CL_PLATFORM_NAME, STRING_BUFFER_LEN, char_buffer, NULL);
+     printf("%-40s = %s\n", "CL_PLATFORM_NAME", char_buffer);
+     clGetPlatformInfo(platform, CL_PLATFORM_VENDOR, STRING_BUFFER_LEN, char_buffer, NULL);
+     printf("%-40s = %s\n", "CL_PLATFORM_VENDOR ", char_buffer);
+     clGetPlatformInfo(platform, CL_PLATFORM_VERSION, STRING_BUFFER_LEN, char_buffer, NULL);
+  	 printf("%-40s = %s\n\n", "CL_PLATFORM_VERSION ", char_buffer);
+     
+	 context_properties[1] = (cl_context_properties)platform;
      clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
      context = clCreateContext(context_properties, 1, &device, NULL, NULL, NULL);
      queue = clCreateCommandQueue(context, device, 0, NULL);
@@ -117,22 +126,94 @@ int main(int, char**)
 	 if(success!=CL_SUCCESS) print_clbuild_errors(program,device);
      kernel = clCreateKernel(program, "dot_prod", NULL); 
 
-	// Input buffer.
+	// Input frame buffer
     input_a_buf = clCreateBuffer(context, CL_MEM_READ_ONLY,
        9*640*360*sizeof(float), NULL, &status);
     checkError(status, "Failed to create buffer for input A");
 
+	// filter 1 of scharr edge detection
     input_b_buf = clCreateBuffer(context, CL_MEM_READ_ONLY,
        9*sizeof(float), NULL, &status);
     checkError(status, "Failed to create buffer for input B");
 	
-    // Output buffer.
-    output_buf = clCreateBuffer(context, CL_MEM_WRITE_ONLY, 360*640*sizeof(float), NULL, &status);
+	// filter 2 of scharr edge detection
+    input_c_buf = clCreateBuffer(context, CL_MEM_READ_ONLY,
+       9*sizeof(float), NULL, &status);
+    checkError(status, "Failed to create buffer for input B");
+    
+	// Filtered output frame buffer 1
+    output_buf_1 = clCreateBuffer(context, CL_MEM_WRITE_ONLY, 360*640*sizeof(float), NULL, &status);
     checkError(status, "Failed to create buffer for output");
+
+	// Filtered output frame buffer 2
+    output_buf_2 = clCreateBuffer(context, CL_MEM_WRITE_ONLY, 360*640*sizeof(float), NULL, &status);
+    checkError(status, "Failed to create buffer for output");
+
+    // Transfer inputs to each device. Each of the host buffers supplied to
+    // clEnqueueWriteBuffer here is already aligned to ensure that DMA is used
+    // for the host-to-device transfer.
+    cl_event write_event[3];
+	cl_event kernel_event,finish_event;
+
+	
+	float *input_b=(float *) malloc(sizeof(float)*9);
+	float *input_c=(float *) malloc(sizeof(float)*9);
+
+	input_b[0] = 1;
+	input_b[1] = 0;
+	input_b[2] = -1;
+	input_b[3] = 2;
+	input_b[4] = 0;
+	input_b[5] = -2;
+	input_b[6] = 1;
+	input_b[7] = 0;
+	input_b[8] = -1;
+	
+	input_c[0] = 1;
+	input_c[1] = 2;
+	input_c[2] = 1;
+	input_c[3] = 0;
+	input_c[4] = 0;
+	input_c[5] = 0;
+	input_c[6] = -1;
+	input_c[7] = -2;
+	input_c[8] = -1;
+	
+	status = clEnqueueWriteBuffer(queue, input_b_buf, CL_FALSE,
+        0, 9*sizeof(float), input_b, 0, NULL, &write_event[0]);
+    checkError(status, "Failed to transfer input B");
+
+	status = clEnqueueWriteBuffer(queue, input_c_buf, CL_FALSE,
+        0, 9*sizeof(float), input_c, 0, NULL, &write_event[1]);
+    checkError(status, "Failed to transfer input B");
+    
+	// Set kernel arguments.
+    unsigned argi = 0;
+	int N = 9;
+
+    status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &input_a_buf);
+    checkError(status, "Failed to set argument 1");
+    
+	status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &input_b_buf);
+    checkError(status, "Failed to set argument 2");
+
+    status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &input_c_buf);
+    checkError(status, "Failed to set argument 3");
+    
+	status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &output_buf_1);
+    checkError(status, "Failed to set argument 4");
+	
+    status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &output_buf_2);
+    checkError(status, "Failed to set argument 1");
+	
+    status = clSetKernelArg(kernel, argi++, sizeof(int), &N);
+    checkError(status, "Failed to set argument 5");
 
 //-------------------------------------------------------------
 
-	float *output=(float *) malloc(640*360*sizeof(float));
+	float *output1=(float *) malloc(640*360*sizeof(float));	
+	float *output2=(float *) malloc(640*360*sizeof(float));	
+    const size_t global_work_size = 640*360;
 
 	VideoCapture camera("./bourne.mp4");
     if(!camera.isOpened())  // check if we succeeded
@@ -144,8 +225,6 @@ int main(int, char**)
                   (int) camera.get(CV_CAP_PROP_FRAME_HEIGHT));
 	//Size S =Size(1280,720);
 	cout << "SIZE:" << S << endl;
-
-	float *frame=(float *) malloc(sizeof(float)*(640+4)*(360+4));
 	
     VideoWriter outputVideo;                                        // Open the output
         outputVideo.open(NAME, ex, 25, S, true);
@@ -156,8 +235,10 @@ int main(int, char**)
         return -1;
     }
 	time_t start,end;
-	double diff,tot;
+	double diff,tot = 0;
 	int count=0;
+	Mat dst;
+	Mat dst2;
 	const char *windowName = "filter";   // Name shown in the GUI window.
     #ifdef SHOW
     namedWindow(windowName); // Resizable window, might not work on Windows.
@@ -170,19 +251,39 @@ int main(int, char**)
         Mat filterframe = Mat(cameraFrame.size(), CV_8UC3);	
         Mat grayframe,edge_x,edge_y,edge,edge_inv;
     	cvtColor(cameraFrame, grayframe, CV_BGR2GRAY);
-		if(count < 2) {
-			Mat dst;
-			Mat dst2;
-			copyMakeBorder(grayframe,dst,2,2,2,2,BORDER_CONSTANT,0);
-			dst.convertTo(dst2,CV_32FC1);
-			float *trans = transform((float*)dst2.data,360,640,3,3);
-		}
+		//--------------------
+		// Pad the frame
+		copyMakeBorder(grayframe,dst,2,2,2,2,BORDER_CONSTANT,0);
+		// Convert to float
+		dst.convertTo(dst2,CV_32FC1);
+		// Transform the matrix for easy convolution
+		float *trans = transform((float*)dst2.data,360,640,3,3);
+		// Write the transformed frame to the gpu buffer
+		status = clEnqueueWriteBuffer(queue, input_a_buf, CL_FALSE,
+			0, 9*640*360*sizeof(float), trans, 0, NULL, &write_event[2]);
+		checkError(status, "Failed to transfer input A");
+		// Apply filter
+		status = clEnqueueNDRangeKernel(queue, kernel, 1, NULL,
+        	&global_work_size, NULL, 1, write_event, &kernel_event);
+    	checkError(status, "Failed to launch kernel");
+		// Read the first filtered frame
+    	status = clEnqueueReadBuffer(queue, output_buf_1, CL_TRUE,
+        	0, 640*360*sizeof(float), output1, 1, &kernel_event, &finish_event);
+    	// Read the second filtered frame
+		status = clEnqueueReadBuffer(queue, output_buf_2, CL_TRUE,
+        	0, 640*360*sizeof(float), output2, 1, &kernel_event, &finish_event);
+		//----------------------
 		time (&start);
-    	GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
+    	/*
+		GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
     	GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
     	GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
 		Scharr(grayframe, edge_x, CV_8U, 0, 1, 1, 0, BORDER_DEFAULT );
 		Scharr(grayframe, edge_y, CV_8U, 1, 0, 1, 0, BORDER_DEFAULT );
+		*/
+		edge_x = ;
+		edge_y = ;
+
 		addWeighted( edge_x, 0.5, edge_y, 0.5, 0, edge );
         threshold(edge, edge, 80, 255, THRESH_BINARY_INV);
 		time (&end);

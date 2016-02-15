@@ -22,7 +22,7 @@ float* transform(float* input, int M, int N, int M1, int N1) {
 		for(int j = 0; j<N; j++) {
 			for(int k = i; k<i+M1; k++) {
 				for(int l = j; l<j+N1; l++) {
-					transformed[(i*N+j)*M1*N1+counter] = input[k*N+l];
+					transformed[(i*N+j)*M1*N1+counter] = input[k*(N+2)+l];
 					counter++;
 				}
 			}
@@ -159,25 +159,26 @@ int main(int, char**)
 	float *input_b=(float *) malloc(sizeof(float)*9);
 	float *input_c=(float *) malloc(sizeof(float)*9);
 
-	input_b[0] = 0;
+	// Sobel filters
+	input_b[0] = 3;
 	input_b[1] = 0;
-	input_b[2] = 0;
-	input_b[3] = 0;
-	input_b[4] = 1;
-	input_b[5] = 0;
-	input_b[6] = 0;
+	input_b[2] = -3;
+	input_b[3] = 10;
+	input_b[4] = 0;
+	input_b[5] = -10;
+	input_b[6] = 3;
 	input_b[7] = 0;
-	input_b[8] = 0;
+	input_b[8] = -3;
 	
-	input_c[0] = 0;
-	input_c[1] = 0;
-	input_c[2] = 0;
+	input_c[0] = 3;
+	input_c[1] = 10;
+	input_c[2] = 3;
 	input_c[3] = 0;
-	input_c[4] = 1;
+	input_c[4] = 0;
 	input_c[5] = 0;
-	input_c[6] = 0;
-	input_c[7] = 0;
-	input_c[8] = 0;
+	input_c[6] = -3;
+	input_c[7] = -10;
+	input_c[8] = -3;
 	
 	status = clEnqueueWriteBuffer(queue, input_b_buf, CL_FALSE,
         0, 9*sizeof(float), input_b, 0, NULL, &write_event[0]);
@@ -190,7 +191,8 @@ int main(int, char**)
 	// Set kernel arguments.
     unsigned argi = 0;
 	int N = 9;
-
+	
+	// Set the kernel arguments
     status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &input_a_buf);
     checkError(status, "Failed to set argument 1");
     
@@ -225,9 +227,9 @@ int main(int, char**)
                   (int) camera.get(CV_CAP_PROP_FRAME_HEIGHT));
 	//Size S =Size(1280,720);
 	cout << "SIZE:" << S << endl;
-	
-    VideoWriter outputVideo;                                        // Open the output
-        outputVideo.open(NAME, ex, 25, S, true);
+
+    VideoWriter outputVideo;   // Open the output
+    outputVideo.open(NAME, ex, 25, S, true);
 
     if (!outputVideo.isOpened())
     {
@@ -246,17 +248,18 @@ int main(int, char**)
     while (true) {
         Mat cameraFrame,displayframe;
 		count=count+1;
-		if(count > 1) break; // 299
+		if(count > 200) break; // 299
         camera >> cameraFrame;
         Mat filterframe = Mat(cameraFrame.size(), CV_8UC3);	
         Mat grayframe,edge_x,edge_y,edge,edge_inv;
     	cvtColor(cameraFrame, grayframe, CV_BGR2GRAY);
 		
 		Mat edge_x_ref, edge_y_ref, edge_ref;
-
-		//GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
-    	//GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
-    	//GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
+		
+		// Blur the image
+		GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
+    	GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
+    	GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
 		//--------------------
 		// Pad the frame
 		copyMakeBorder(grayframe,dst,1,1,1,1,BORDER_CONSTANT,0);
@@ -264,11 +267,12 @@ int main(int, char**)
 		dst.convertTo(dst2,CV_32FC1);
 		// Transform the matrix for easy convolution
 		float *trans = transform((float*)dst2.data,360,640,3,3);
+		time (&start);
 		// Write the transformed frame to the gpu buffer
 		status = clEnqueueWriteBuffer(queue, input_a_buf, CL_FALSE,
 			0, 9*640*360*sizeof(float), trans, 0, NULL, &write_event[2]);
 		checkError(status, "Failed to transfer input A");
-		// Apply filter
+		// Apply sobel edge detection filter
 		status = clEnqueueNDRangeKernel(queue, kernel, 1, NULL,
         	&global_work_size, NULL, 1, write_event, &kernel_event);
     	checkError(status, "Failed to launch kernel");
@@ -279,40 +283,17 @@ int main(int, char**)
 		status = clEnqueueReadBuffer(queue, output_buf_2, CL_TRUE,
         	0, 640*360*sizeof(float), output2, 1, &kernel_event, &finish_event);
 		//----------------------
-		time (&start);
-    	/*
-		GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
-    	GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
-    	GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
-		Scharr(grayframe, edge_x, CV_8U, 0, 1, 1, 0, BORDER_DEFAULT );
-		Scharr(grayframe, edge_y, CV_8U, 1, 0, 1, 0, BORDER_DEFAULT );
-		*/
 		
-		// Ref
-		//Scharr(grayframe, edge_x_ref, CV_8U, 0, 1, 1, 0, BORDER_DEFAULT );	
-		//Scharr(grayframe, edge_y_ref, CV_8U, 1, 0, 1, 0, BORDER_DEFAULT );
-
+		// Put the outputs in Mat objects
 		edge_x = cv::Mat(360,640,CV_32FC1,output1);
 		edge_y = cv::Mat(360,640,CV_32FC1,output2);
 
+		// Convert to unsigned char
 		edge_x.convertTo(edge_x,CV_8UC1);
 		edge_y.convertTo(edge_y,CV_8UC1);
-		
-		// Ref
-		//addWeighted( edge_x_ref, 0.5, edge_y_ref, 0.5, 0, edge_ref);
-        //threshold(edge_ref, edge_ref, 80, 255, THRESH_BINARY_INV);
 
-		addWeighted( edge_x, 0.5, edge_y, 0.5, 0, edge );
-        threshold(edge, edge, 80, 255, THRESH_BINARY_INV);
-		
-		/*
-		for(int i = 0; i<640*360; i++) {
-			if(fabs(edge_x_ref.data[i] - edge_x.data[i]) > 0.0001) {
-				printf("Not equal at index: %d, diff: %f\n",i,fabs(edge_x_ref.data[i] - edge_x.data[i]));
-				break;
-			}
-		}
-		*/
+		addWeighted(edge_x,0.5,edge_y,0.5,0,edge);
+        threshold(edge,edge,80,255,THRESH_BINARY_INV);
 
 		time (&end);
         cvtColor(edge, edge_inv, CV_GRAY2BGR);

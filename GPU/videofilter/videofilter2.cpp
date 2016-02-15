@@ -185,7 +185,7 @@ int main(int, char**)
 
 	status = clEnqueueWriteBuffer(queue, input_c_buf, CL_FALSE,
         0, 9*sizeof(float), input_c, 0, NULL, &write_event[1]);
-    checkError(status, "Failed to transfer input B");
+    checkError(status, "Failed to transfer input C");
     
 	// Set kernel arguments.
     unsigned argi = 0;

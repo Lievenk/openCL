@@ -5,6 +5,7 @@ __kernel void dot_prod(__global const float *frame,__global const float *filter1
 	output1[threadID] = 0;
 	output2[threadID] = 0;
 
+	//printf("%d\n",threadID);
 	for(int i = 0; i < N; i++) {
 		output1[threadID] += frame[N*threadID+i] * filter1[i];
 		output2[threadID] += frame[N*threadID+i] * filter2[i];	

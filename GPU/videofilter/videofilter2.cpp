@@ -115,7 +115,7 @@ int main(int, char**)
      context = clCreateContext(context_properties, 1, &device, NULL, NULL, NULL);
      queue = clCreateCommandQueue(context, device, 0, NULL);
 
-     unsigned char **opencl_program=read_file("dot_prod.cl");
+     unsigned char **opencl_program=read_file("dot_product.cl");
      program = clCreateProgramWithSource(context, 1, (const char **)opencl_program, NULL, NULL);
      if (program == NULL)
 	{
@@ -159,25 +159,25 @@ int main(int, char**)
 	float *input_b=(float *) malloc(sizeof(float)*9);
 	float *input_c=(float *) malloc(sizeof(float)*9);
 
-	input_b[0] = 1;
+	input_b[0] = 3;
 	input_b[1] = 0;
-	input_b[2] = -1;
-	input_b[3] = 2;
+	input_b[2] = -3;
+	input_b[3] = 10;
 	input_b[4] = 0;
-	input_b[5] = -2;
-	input_b[6] = 1;
+	input_b[5] = -10;
+	input_b[6] = 3;
 	input_b[7] = 0;
-	input_b[8] = -1;
+	input_b[8] = -3;
 	
-	input_c[0] = 1;
-	input_c[1] = 2;
-	input_c[2] = 1;
+	input_c[0] = 3;
+	input_c[1] = 10;
+	input_c[2] = 3;
 	input_c[3] = 0;
 	input_c[4] = 0;
 	input_c[5] = 0;
-	input_c[6] = -1;
-	input_c[7] = -2;
-	input_c[8] = -1;
+	input_c[6] = -3;
+	input_c[7] = -10;
+	input_c[8] = -3;
 	
 	status = clEnqueueWriteBuffer(queue, input_b_buf, CL_FALSE,
         0, 9*sizeof(float), input_b, 0, NULL, &write_event[0]);
@@ -204,10 +204,10 @@ int main(int, char**)
     checkError(status, "Failed to set argument 4");
 	
     status = clSetKernelArg(kernel, argi++, sizeof(cl_mem), &output_buf_2);
-    checkError(status, "Failed to set argument 1");
+    checkError(status, "Failed to set argument 5");
 	
     status = clSetKernelArg(kernel, argi++, sizeof(int), &N);
-    checkError(status, "Failed to set argument 5");
+    checkError(status, "Failed to set argument 6");
 
 //-------------------------------------------------------------
 
@@ -251,6 +251,10 @@ int main(int, char**)
         Mat filterframe = Mat(cameraFrame.size(), CV_8UC3);	
         Mat grayframe,edge_x,edge_y,edge,edge_inv;
     	cvtColor(cameraFrame, grayframe, CV_BGR2GRAY);
+
+		GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
+    	GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
+    	GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
 		//--------------------
 		// Pad the frame
 		copyMakeBorder(grayframe,dst,2,2,2,2,BORDER_CONSTANT,0);
@@ -281,8 +285,11 @@ int main(int, char**)
 		Scharr(grayframe, edge_x, CV_8U, 0, 1, 1, 0, BORDER_DEFAULT );
 		Scharr(grayframe, edge_y, CV_8U, 1, 0, 1, 0, BORDER_DEFAULT );
 		*/
-		edge_x = ;
-		edge_y = ;
+		edge_x = cv::Mat(360,640,CV_32FC1,output1);
+		edge_y = cv::Mat(360,640,CV_32FC1,output2);
+
+		edge_x.convertTo(edge_x,CV_8UC1);
+		edge_y.convertTo(edge_y,CV_8UC1);
 
 		addWeighted( edge_x, 0.5, edge_y, 0.5, 0, edge );
         threshold(edge, edge, 80, 255, THRESH_BINARY_INV);

@@ -223,12 +223,14 @@ for(unsigned i = 0; i < M*O; i++) {
 }
     // Release local events.
     clReleaseEvent(write_event[0]);
-clReleaseKernel(kernel);
-clReleaseCommandQueue(queue);
-clReleaseMemObject(input_a_buf);
-clReleaseMemObject(output_buf);
-clReleaseProgram(program);
-clReleaseContext(context);
+	clReleaseEvent(write_event[1]);
+	clReleaseKernel(kernel);
+	clReleaseCommandQueue(queue);
+	clReleaseMemObject(input_a_buf);
+	clReleaseMemObject(input_b_buf);
+	clReleaseMemObject(output_buf);
+	clReleaseProgram(program);
+	clReleaseContext(context);
 
 
 //--------------------------------------------------------------------

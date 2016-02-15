@@ -227,7 +227,7 @@ int main(int, char**)
 	cout << "SIZE:" << S << endl;
 	
     VideoWriter outputVideo;                                        // Open the output
-        outputVideo.open(NAME, ex, 1, S, true);
+        outputVideo.open(NAME, ex, 25, S, true);
 
     if (!outputVideo.isOpened())
     {
@@ -244,22 +244,19 @@ int main(int, char**)
     namedWindow(windowName); // Resizable window, might not work on Windows.
     #endif
     while (true) {
-        Mat cameraFrame(8,8),displayframe;
+        Mat cameraFrame,displayframe;
 		count=count+1;
-		for(int i = 0; i<64; i++) {
-			cameraFrame.data[i] = i;
-		}
 		if(count > 1) break; // 299
-        //camera >> cameraFrame;
+        camera >> cameraFrame;
         Mat filterframe = Mat(cameraFrame.size(), CV_8UC3);	
         Mat grayframe,edge_x,edge_y,edge,edge_inv;
     	cvtColor(cameraFrame, grayframe, CV_BGR2GRAY);
 		
 		Mat edge_x_ref, edge_y_ref, edge_ref;
 
-		GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
-    	GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
-    	GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
+		//GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
+    	//GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
+    	//GaussianBlur(grayframe, grayframe, Size(3,3),0,0);
 		//--------------------
 		// Pad the frame
 		copyMakeBorder(grayframe,dst,1,1,1,1,BORDER_CONSTANT,0);
@@ -292,8 +289,8 @@ int main(int, char**)
 		*/
 		
 		// Ref
-		Scharr(grayframe, edge_x_ref, CV_8U, 0, 1, 1, 0, BORDER_DEFAULT );	
-		Scharr(grayframe, edge_y_ref, CV_8U, 1, 0, 1, 0, BORDER_DEFAULT );
+		//Scharr(grayframe, edge_x_ref, CV_8U, 0, 1, 1, 0, BORDER_DEFAULT );	
+		//Scharr(grayframe, edge_y_ref, CV_8U, 1, 0, 1, 0, BORDER_DEFAULT );
 
 		edge_x = cv::Mat(360,640,CV_32FC1,output1);
 		edge_y = cv::Mat(360,640,CV_32FC1,output2);
@@ -302,17 +299,20 @@ int main(int, char**)
 		edge_y.convertTo(edge_y,CV_8UC1);
 		
 		// Ref
-		addWeighted( edge_x_ref, 0.5, edge_y_ref, 0.5, 0, edge_ref);
-        threshold(edge_ref, edge_ref, 80, 255, THRESH_BINARY_INV);
+		//addWeighted( edge_x_ref, 0.5, edge_y_ref, 0.5, 0, edge_ref);
+        //threshold(edge_ref, edge_ref, 80, 255, THRESH_BINARY_INV);
 
 		addWeighted( edge_x, 0.5, edge_y, 0.5, 0, edge );
         threshold(edge, edge, 80, 255, THRESH_BINARY_INV);
-
+		
+		/*
 		for(int i = 0; i<640*360; i++) {
 			if(fabs(edge_x_ref.data[i] - edge_x.data[i]) > 0.0001) {
 				printf("Not equal at index: %d, diff: %f\n",i,fabs(edge_x_ref.data[i] - edge_x.data[i]));
+				break;
 			}
 		}
+		*/
 
 		time (&end);
         cvtColor(edge, edge_inv, CV_GRAY2BGR);
